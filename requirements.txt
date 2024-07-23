@@ -1,0 +1,12 @@
+torch
+torchvision
+torchaudio
+numpy
+matplotlib
+pandas
+datasets
+tqdm
+googledrivedownloader 
+imageio 
+numpy 
+torch
