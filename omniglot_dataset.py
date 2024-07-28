@@ -106,6 +106,8 @@ def getDataset():
     Omniglot is a dataset of over 1623 characters from 50 different alphabets (Lake et al.,
     2015). Each character has 20 hand-written images. The dataset is divided into two parts. The first 963
     classes constitute the meta-training dataset whereas the remaining 660 the meta-testing dataset.
+
+    In this case we use the 28 * 28 Images for easier classifications.
     """
 
     dataset = Omniglot("data", download=True, transform=transforms.Compose([

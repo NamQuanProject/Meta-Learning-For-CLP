@@ -7,8 +7,10 @@ import numpy as np
 from tqdm import tqdm
 import argparse
 from split_omniglot_dataset import Split_Omniglot
-
+import matplotlib.pyplot as plt
+from torchvision.transforms import ToPILImage
 from torch.utils import tensorboard
+
 
 ## MODEL INSTRUCTIONS:
 NUM_INPUT_CHANNELS = 1
@@ -30,7 +32,7 @@ class MAML_REP(nn.Module):
     We treat the convolution parameters as θ and FC layer parameters as W.
     
     
-    MAML INSTRUCTIONS:
+    MAML-REP INSTRUCTIONS:
     Inits MAML.
 
         The network consists of six convolutional blocks followed by a linear
@@ -66,8 +68,9 @@ class MAML_REP(nn.Module):
         device):
         super(MAML_REP, self).__init__()
 
-        meta_parameters = {}
 
+        # Construct meta_parameters 
+        meta_parameters = {}
         self.device = device
         # Construct feature extractor
         in_channels = NUM_INPUT_CHANNELS
@@ -217,8 +220,8 @@ class MAML_REP(nn.Module):
             ## INNER UPDATE: 
             gradients = torch.autograd.grad(loss, inputs=list(parameters.values()), create_graph=train)
             for parameter_name, gradient in zip(list(parameters.keys()), gradients):
-
-                parameters[parameter_name] = parameters[parameter_name] - self._inner_lrs[parameter_name] * gradient
+                if "conv" in parameter_name:
+                    parameters[parameter_name] = parameters[parameter_name] - self._inner_lrs[parameter_name] * gradient
         
         with torch.no_grad():
             class_scores = self._forward(images, parameters)
@@ -375,6 +378,7 @@ class MAML_REP(nn.Module):
             if i_step % SAVE_INTERVAL == 0:
                 self._save(i_step)
 
+    
     def test(self, dataloader_test):
         """Evaluate the MAML on test tasks.
 
@@ -393,6 +397,51 @@ class MAML_REP(nn.Module):
             f'mean {mean:.3f}, '
             f'95% confidence interval {mean_95_confidence_interval:.3f}'
         )
+
+    def sample_test(self, dataloader_test):
+        """Sample one test task, evaluate, and visualize results.
+
+        Args:
+            dataloader_test (DataLoader): loader for test tasks
+        """
+        task_batch = next(iter(dataloader_test))
+        images_support, labels_support, images_query, labels_query = task_batch[0]
+        
+        # Move data to device
+        images_support = images_support.to(self.device)
+        labels_support = labels_support.to(self.device)
+        images_query = images_query.to(self.device)
+        labels_query = labels_query.to(self.device)
+
+        print('Visualizing support images before adaptation...')
+        before_adapt_class_scores = self._forward(images_support, self._meta_parameters)
+        before_adapt_accuracy_query = self.cal_accuracy(before_adapt_class_scores, labels_support)
+        before_adapt_preds = torch.argmax(before_adapt_class_scores, dim=-1).cpu().detach()
+        print(f'Before adapt support Accuracy: {before_adapt_accuracy_query:.3f}')
+        show_images(images_support, labels_support, "SUPPORT")
+        show_images(images_support, before_adapt_preds, 'SPB: ')
+
+
+        print('Visualizing query images before adaptation...')
+        show_images(images_query, labels_query, 'Query')
+
+        parameters, accuracies_support = self._inner_loop(images_support, labels_support, train=False)
+
+        class_scores = self._forward(images_query, parameters)
+        accuracy_query = self.cal_accuracy(class_scores, labels_query)
+
+        print(f'Query Accuracy: {accuracy_query:.3f}')
+
+        print('Visualizing support images (unchanged)...')
+        show_images(images_support, labels_support, 'Support')
+
+        print('Visualizing query images after adaptation...')
+        # Get predictions for query images after adaptation
+        preds = torch.argmax(class_scores, dim=-1).cpu().detach()
+        show_images(images_query, preds, 'Pred: ')
+        
+
+
 
     def load(self, checkpoint_step):
         """Loads a checkpoint.
@@ -433,6 +482,11 @@ class MAML_REP(nn.Module):
             f'{os.path.join(self._log_dir, "state")}{checkpoint_step}.pt'
         )
         print('Saved checkpoint.')
+
+
+
+
+
 
 
 def main(args):
@@ -521,7 +575,32 @@ def main(args):
         maml.test(dataloader_test)
 
 
+def show_images(images, labels, title_prefix, rows=1, cols=5):
+    """Helper function to show images in chunks of rows and columns.
+    
+    Args:
+        images (Tensor): Tensor containing images to display
+        labels (Tensor): Tensor containing labels for the images
+        title_prefix (str): Prefix for the title of each subplot
+        rows (int): Number of rows in the grid
+        cols (int): Number of columns in the grid
+    """
+    num_images = images.size(0)
+    num_figures = (num_images + (rows * cols) - 1) // (rows * cols)  
 
+    for fig_idx in range(num_figures):
+        plt.figure(figsize=(cols * 2, rows * 2))
+        for i in range(rows * cols):
+            img_idx = fig_idx * rows * cols + i
+            if img_idx >= num_images:
+                break
+            plt.subplot(rows, cols, i + 1)
+            img = images[img_idx].cpu().detach()
+            label = labels[img_idx].cpu().item()
+            plt.imshow(ToPILImage()(img.squeeze(0)), cmap='gray')
+            plt.title(f'{title_prefix} {label}')
+            plt.axis('off')
+        plt.show()
 
 
 

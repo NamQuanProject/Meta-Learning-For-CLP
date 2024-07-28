@@ -104,7 +104,7 @@ class Split_Omniglot(Dataset):
             num_workers=num_workers,
             collate_fn=self.identity,
             pin_memory=torch.cuda.is_available(),
-            drop_last=True
+            drop_last=True,
         )
 
 
@@ -112,6 +112,7 @@ class Split_Omniglot(Dataset):
 
 
 if __name__ == '__main__':
+    ## CHECKING 
     dataset = Split_Omniglot()
     train_loader = dataset.get_omniglot_dataloader(
         split='test',
@@ -119,16 +120,16 @@ if __name__ == '__main__':
         num_way=5,
         num_support=5,
         num_query=5,
-        num_tasks_per_epoch= 600 
+        num_tasks_per_epoch= 640000
     )
     
-    print(f'Number of tasks in train_loader: {len(train_loader)}')
+    print(f'Number of batch tasks in train_loader: {len(train_loader)}')
     
     # Check the last batch of the DataLoader
     for i, tasks in enumerate(train_loader):
         if i == 0:
-            print(f'Batch {i} type: {type(tasks)}')
-            print(f'Batch {i} length: {len(tasks)}') 
+            print(f'Batch Task {i} type: {type(tasks)}')
+            print(f'Batch Task {i} length: {len(tasks)}') 
 
             # Inspect each task
             for j, task in enumerate(tasks):
